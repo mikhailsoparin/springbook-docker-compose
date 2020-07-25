@@ -1,0 +1,67 @@
+version: '2.1'
+
+services:
+  database:
+    image: postgres:12.2
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: "postgres"
+      POSTGRES_PASSWORD: "postgres"
+      POSTGRES_DB: "moparin_dev"
+    networks:
+      backend:
+        aliases:
+          - "database"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - ./schema.sql:/docker-entrypoint-initdb.d/1-schema.sql
+      - ./data.sql:/docker-entrypoint-initdb.d/2-data.sql
+  configserver:
+    image: moparin/configserver:0.0.1-SNAPSHOT
+    ports:
+      - "8071:8071"
+    environment:
+      ENCRYPT_KEY: "fje83Ki8403Iod87dne7Yjsl3THueh48jfuO9j4U2hf64Lo"
+    networks:
+      backend:
+        aliases:
+          - "configserver"
+  eurekaserver:
+    image: moparin/eurekaserver:0.0.1-SNAPSHOT
+    poorts:
+      - "8070:8070"
+    depends_on:
+      database:
+        condition: service_healthy
+      configserver:
+        condition: service_started
+    networks:
+      backend:
+        aliases:
+          - "eurekaserver"
+  licensingservice:         #<-- this is lable of the service, it also serves as a DNS entry for the docker instance
+    image: moparin/licensing-service:0.0.1-SNAPSHOT #<-- first docker-compose tries to find image in the local Docker repo,
+                                                    #if it's not there it will check cnetral Docker hub (http://hub.docker.com)
+    environment:            #<-- used to pass along environment variables to starting docker image
+      PROFILE: "dev"
+      CONFIGSERVER_URI: "http://configserver:8071"
+      CONFIGSERVER_PORT: "8071"
+      DATABASESERVER_PORT: "5432"
+      ENCRYPT_KEY: "IMSYMMETRIC"         #<-- don't do this in production, instead reference 'ENCRYPT_KEY' as operating system environment variable
+    depends_on:
+      database:
+        condition: service_healthy
+      configserver:
+        condition: service_started
+    ports:
+      - "8080:8080"         #<-- port numbers that will be exposed to the outside world
+    networks:
+      - backend
+networks:
+  backend:
+    driver: bridge
