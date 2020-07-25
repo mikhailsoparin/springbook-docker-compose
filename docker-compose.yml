@@ -33,7 +33,7 @@ services:
           - "configserver"
   eurekaserver:
     image: moparin/eurekaserver:0.0.1-SNAPSHOT
-    poorts:
+    ports:
       - "8070:8070"
     depends_on:
       database:
@@ -60,6 +60,23 @@ services:
         condition: service_started
     ports:
       - "8080:8080"         #<-- port numbers that will be exposed to the outside world
+    networks:
+      - backend
+  organizationservice:
+    image: moparin/organization-service:0.0.1-SNAPSHOT
+    environment:
+      PROFILE: "dev"
+      CONFIGSERVER_URI: "http://configserver:8071"
+      CONFIGSERVER_PORT:   "8071"
+      DATABASESERVER_PORT: "5432"
+      ENCRYPT_KEY:       "IMSYMMETRIC"
+    depends_on:
+      database:
+        condition: service_healthy
+      configserver:
+        condition: service_started
+    ports:
+      - "8081:8081"
     networks:
       - backend
 networks:
