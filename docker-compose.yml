@@ -66,6 +66,24 @@ services:
       backend:
         aliases:
           - "gateway"
+  authenticationservice:
+    image: moparin/authentication-service:0.0.1-SNAPSHOT
+    environment:
+      PROFILE: "dev"
+      CONFIGSERVER_URI: "http://configserver:8071"
+      CONFIGSERVER_PORT:   "8071"
+      ENCRYPT_KEY:       "IMSYMMETRIC"
+    depends_on:
+      database:
+        condition: service_healthy
+      configserver:
+        condition: service_started
+    ports:
+      - "8082:8082"
+    networks:
+      backend:
+        aliases:
+          - "authenticationservice"
   licensingservice:         #<-- this is lable of the service, it also serves as a DNS entry for the docker instance
     image: moparin/licensing-service:0.0.1-SNAPSHOT #<-- first docker-compose tries to find image in the local Docker repo,
                                                     #if it's not there it will check cnetral Docker hub (http://hub.docker.com)
