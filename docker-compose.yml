@@ -62,6 +62,7 @@ services:
         condition: service_started
       eurekaserver:
         condition: service_started
+    #command: ["./wait-for-it.sh", "eurekaserver:8070"]
     networks:
       backend:
         aliases:
@@ -70,6 +71,8 @@ services:
     image: wurstmeister/zookeeper:latest
     ports:
       - 2181:2181
+    depends_on:
+      - eurekaserver
     networks:
       backend:
         aliases:
@@ -131,6 +134,10 @@ services:
         condition: service_healthy
       configserver:
         condition: service_started
+      authenticationservice:
+        condition: service_started
+      kafkaserver:
+        condition: service_started
     ports:
       - "8080:8080"         #<-- port numbers that will be exposed to the outside world
     networks:
@@ -148,10 +155,83 @@ services:
         condition: service_healthy
       configserver:
         condition: service_started
+      kafkaserver:
+        condition: service_started
     ports:
       - "8081:8081"
     networks:
       - backend
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.7.0
+    container_name: elasticsearch
+    environment:
+      - node.name=elasticsearch
+      - discovery.type=single-node
+      - cluster.name=docker-cluster
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    depends_on:
+      configserver:
+        condition: service_started
+      eurekaserver:
+        condition: service_started
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - esdata1:/usr/share/elasticsearch/data
+    ports:
+      - 9300:9300         #<-- maps 9300 as a cluster communication port
+      - 9200:9200         #<-- maps 9200 as a REST communication port
+    networks:
+      backend:
+        aliases:
+          - "elasticsearch"
+  kibana:
+    image: docker.elastic.co/kibana/kibana:7.7.0
+    container_name: kibana
+    environment:
+      ELASTICSEARCH_URL: "http://elasticsearch:9300"
+    ports:
+      - 5601:5601
+    depends_on:
+      - elasticsearch
+    networks:
+      backend:
+        aliases:
+          - "kibana"
+  logstash:
+    image: docker.elastic.co/logstash/logstash:7.7.0
+    container_name: logstash
+    command: logstash -f /etc/logstash/conf.d/logstash.conf     #<-- loads logstash config from a specific direcroty
+    volumes:
+      - ./config:/etc/logstash/conf.d                           #<-- moounts the configuration file in the Logstash running container
+    ports:
+      - "5000:5000"
+    depends_on:
+      - elasticsearch
+    networks:
+      backend:
+        aliases:
+          - "logstash"
+  zipkin: 
+    image: openzipkin/zipkin 
+    container_name: zipkin
+    depends_on: 
+      - logstash
+    environment: 
+      - STORAGE_TYPE=elasticsearch
+      - "ES_HOSTS=elasticsearch:9300"
+    ports:
+      - "9411:9411"
+    networks:
+      backend:
+        aliases:
+          - "zipkin"
+volumes:
+  esdata1:
+    driver: local
 networks:
   backend:
     driver: bridge
